@@ -25,15 +25,17 @@ from keras.preprocessing.image import ImageDataGenerator
 import settings
 import models
 
+import traceback
+
 def persistTrainingData(trainDict, basename, generator):
     """
     Returns persisted training and testing data if stored.
-    If not, it generates new data with generator(trainDict) 
+    If not, it generates new data with generator(trainDict)
     and stores it.
     """
     trainingData = {}
     testingData = {}
-    
+
     try:
         with open(basename+'_trainingData.json', 'r') as file:
             raw=file.read()
@@ -49,19 +51,19 @@ def persistTrainingData(trainDict, basename, generator):
         with open(basename+'_testingData.json', 'w') as file:
             json.dump(testingData, file)
     return trainingData, testingData
-    
+
 def divideTrainingData(trainDict):
     """
     Divides a dictionary [imgName -> data] into two: training data,
     and testing data. The testing data is only chosen from images of
-    whales that have > 1 image in the data set. 
+    whales that have > 1 image in the data set.
 
     Returns (trainingData, testingData)
     """
 
     trainingData = {}
     testingData = {}
-    
+
     # Assemble a dictionary of candidate images containing only
     #  images of whales who are represented multiple times in the data set
     numPics = {}
@@ -84,8 +86,8 @@ def divideTrainingData(trainDict):
         if imageName in trainingKeys:
             testingData[imageName] = trainDict[imageName]
         else:
-            trainingData[imageName] = trainDict[imageName]    
-        
+            trainingData[imageName] = trainDict[imageName]
+
     return (trainingData, testingData)
 
 class ParallelDatagen():
@@ -100,7 +102,7 @@ class ParallelDatagen():
     currentDataset = None
     dataGen = None
     threads = []
-    
+
     def __init__(self, params):
         # The queue will block when its max size is reached.
         # Here we set the maxsize to 4, so we will only process
@@ -114,14 +116,14 @@ class ParallelDatagen():
         pass
 
     def generateBatch(self):
-        """ 
+        """
         - Override this function -
         Your function should return a single batch of training data,
         given self.params
         """
         time.sleep(2)
         return [1, 2, 3]
-    
+
     def runGenData(self):
         while True:
             try:
@@ -130,12 +132,12 @@ class ParallelDatagen():
                 print("Timed out adding item to queue")
 
     def generate(self, numBatches, batchSize=None, dataset=None):
-        """ 
-        Yields data from a thread safe queue, and starts the 
+        """
+        Yields data from a thread safe queue, and starts the
         generative process
         """
         self.currentDataset = dataset
-        
+
         if self.params['parallel'] == False:
             print("Generating data in serial - no parallelism")
             for i in range(numBatches):
@@ -145,7 +147,7 @@ class ParallelDatagen():
         if self.dataGen == None:
             self.dataGen = Process(target=self.runGenData, args=())
             self.dataGen.start()
-        
+
         i = 0
         while i < numBatches:
             i += 1
@@ -160,8 +162,8 @@ class ParallelDatagen():
 class HumpbackImagegen(ParallelDatagen):
     """
     Generates augmented humpback image training data, and augments the
-    positional data to match. 
-    
+    positional data to match.
+
     Shifts and rotations in the base image are reflected in the
     relative [0,1] position data for flukes
 
@@ -170,7 +172,7 @@ class HumpbackImagegen(ParallelDatagen):
       dataset: dictionary of [imageName -> imageData],
       batchSize: number of augmented images to generate in each batch
     }
-    
+
     Optional parameters: {
       rotation: [0, 360] in degrees (default 0),
       shift: maximum pixels to shift (default 0),
@@ -186,7 +188,7 @@ class HumpbackImagegen(ParallelDatagen):
         if dataset == None:
             dataset = self.params['dataset']
 
-        batchSize = self.params['batchSize']            
+        batchSize = self.params['batchSize']
         rotation = 0
         shift = 0
         minScale = 1.0
@@ -216,9 +218,10 @@ class HumpbackImagegen(ParallelDatagen):
             try:
                 image = skimage.io.imread(imageFolder + "/" + filename, "pillow")
             except:
-                print("Failed to load image "+filename)
+                print("Failed to load image " + filename)
+                traceback.print_exc()
                 continue
-            
+
             resized = preprocessImage(image, settings.imgRows, settings.imgCols)
             d = dataset[filename]
             points = [[d[1], d[2]], [d[3], d[4]]]
@@ -239,11 +242,11 @@ class HumpbackImagegen(ParallelDatagen):
 class VGGDatagen(ParallelDatagen):
     """
     Generate data using HumbackImagegen, then run data through pretrained VGG.
-    If params['precomputedData'] == True, then data is loaded from 
+    If params['precomputedData'] == True, then data is loaded from
     params['precomputedDataFolder'] instead of generated on the fly.
 
-    Precomputed data can be used for rapid testing as it greatly reduces 
-    training time. 
+    Precomputed data can be used for rapid testing as it greatly reduces
+    training time.
     """
     hbdatagen = None
     def initialize(self):
@@ -254,12 +257,12 @@ class VGGDatagen(ParallelDatagen):
                     self.files.append(filename)
         else:
             # Copy our params to use for the HunchbackImagegen
-            # However, we'd like that datagen to be parallel. 
+            # However, we'd like that datagen to be parallel.
             hbParams = {}
             for k in self.params:
                 if k != "parallel":
                     hbParams[k] = self.params[k]
-                    
+
             self.hbDatagen = HumpbackImagegen(hbParams)
             self.vggModel = models.VGGModel({'h5weights': 'VGG/FullVGGWeights.h5',
                                              'modelDepth': 4 })
@@ -276,7 +279,7 @@ class VGGDatagen(ParallelDatagen):
 
     def _generateBatch(self, dataset=None, imageFolder=None):
         images, labels, filenames = self.hbDatagen.generateBatch(dataset, imageFolder)
-        
+
         # Resize the images and convert them to RGB
         resized = []
         for idx in range(len(images)):
@@ -302,15 +305,15 @@ class VGGDatagen(ParallelDatagen):
         """
         Returns a pseudo-random subset of the saved data.
         The algorithm first chooses a random (batchSize ** 2) * 4 block of files,
-        then chooses batchSize random images from within those. 
+        then chooses batchSize random images from within those.
 
-        This is done to speed disk-reads so that images are more likely to be 
+        This is done to speed disk-reads so that images are more likely to be
         sequentially stored on disk. Otherwise, access times and disk load
         can be an issue, since individual files may be spread out over half
-        the hard drive. 
-        
+        the hard drive.
+
         This approach assumes that generated files are listed in the order of their
-        inodes on disk. 
+        inodes on disk.
         """
         blockSize = (self.params['batchSize'] ** 2) * 4
         blockIdx = np.random.randint(0, len(self.files)/blockSize)
@@ -322,7 +325,7 @@ class VGGDatagen(ParallelDatagen):
         for i in indices:
             imageFiles.append(self.files[i])
         return imageFiles
-        
+
     def generateBatch(self, dataset=None, imageFolder=None):
         if self.params['precomputedData'] == True:
             imageFiles = np.random.choice(np.array(self.files), size=self.params['batchSize'], replace=False)
@@ -343,7 +346,7 @@ class VGGDatagen(ParallelDatagen):
             return np.array(data), np.array(labels), filenames
         else:
             return self._generateBatch(dataset, imageFolder)
-    
+
 
 def augmentImage(image, points, shift, rotation, minScale=1.0, maxScale=1.0, reflect=False):
     """
@@ -384,7 +387,7 @@ def augmentImage(image, points, shift, rotation, minScale=1.0, maxScale=1.0, ref
             if doReflect:
                 newPoint = [1. - point[0], point[1]]
             newPoint = [newPoint[0] * chosenScale, newPoint[1] * chosenScale]
-            newPoint = shiftPoint(newPoint, image, shiftX, shiftY)            
+            newPoint = shiftPoint(newPoint, image, shiftX, shiftY)
             newPoint = rotatePoint(newPoint, radians(angle))
 
 
@@ -393,11 +396,11 @@ def augmentImage(image, points, shift, rotation, minScale=1.0, maxScale=1.0, ref
     img = np.copy(image)
     if doReflect:
         img = imgReflect(img, 1)
-    img = imgScale(img, chosenScale)        
+    img = imgScale(img, chosenScale)
     img = imgShift(img, shiftX, shiftY, rowIndex=0, colIndex=1)
-    img = imgRotation(img, angle, axes=(0,1))    
+    img = imgRotation(img, angle, axes=(0,1))
 
-    
+
     return img, newPoints
 
 def shiftPoint(point, image, shiftX, shiftY):
@@ -405,7 +408,7 @@ def shiftPoint(point, image, shiftX, shiftY):
     point[0] += float(shiftX) / float(len(image[0]))
     point[1] += float(shiftY) / float(len(image))
     return point
-    
+
 def rotatePoint(point, rads):
     """ Rotate a point [ [0, 1], [0, 1]] in an image about its center """
     w = 1.0
@@ -457,12 +460,12 @@ def imgShift(x, shiftX, shiftY, fill_mode='nearest', cval=0., rowIndex=0, colInd
                                     mode=fill_mode,
                                     cval=cval)
     return x
-                                                        
+
 
 def preprocessImage(image, xDim, yDim):
     """
     Converts a given image to xDim x yDim
-    Pads as necessary 
+    Pads as necessary
     Converts to grayscale if necessary
     """
     w = float(len(image[0]))
@@ -475,7 +478,7 @@ def preprocessImage(image, xDim, yDim):
     desiredRatio = xDim / yDim
     paddingX = 0
     paddingY = 0
-    
+
     if currentRatio < desiredRatio:
         # (a+x)/b = c/d
         # x = bc/d - a
@@ -487,25 +490,25 @@ def preprocessImage(image, xDim, yDim):
 
     # Convert values to floats
     image = skimage.img_as_float(image)
-    
+
     # Convert grayscale to RGB if necessary M&
     #if image.ndim == 2:
     #    image = skimage.color.gray2rgb(image)
 
     if image.ndim == 3: #M&
         image = skimage.color.rgb2gray(image)
-        
+
     # Convert to symmetric padding
     paddingX = int(math.floor(paddingX/2.))
     paddingY = int(math.floor(paddingX/2.))
-    
+
     # Pad and resize image
     padded = skimage.util.pad(image, ((paddingY,paddingY), (paddingX,paddingX)), mode='constant') #(0,0) M&
     resized = skimage.transform.resize(padded, (xDim, yDim)) # ,3 M&
 
     return resized
-    
-    
+
+
 def reshapeKeras(img):
     """ Make the first axis the channel axis of the image """
     return np.swapaxes(np.swapaxes(img, 0, 2), 1, 2)

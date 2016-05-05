@@ -1,4 +1,6 @@
-FROM gcr.io/tensorflow/tensorflow:latest-gpu
+# default is CPU-only. If you have a GPU switch use the first
+#FROM gcr.io/tensorflow/tensorflow:latest-gpu
+FROM gcr.io/tensorflow/tensorflow
 
 RUN apt-get update; \
     apt-get install -y \
@@ -7,7 +9,7 @@ RUN apt-get update; \
     build-essential python-dev python-setuptools \
     libatlas-dev libatlas3gf-base \
     emacs24 python-skimage \
-    libhdf5-dev 
+    libhdf5-dev
 
 RUN update-alternatives --set libblas.so.3 \
     /usr/lib/atlas-base/atlas/libblas.so.3; \

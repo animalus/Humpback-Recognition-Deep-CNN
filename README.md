@@ -2,7 +2,11 @@
 This project uses deep convolutional neural networks to predict whale identities from images of their flukes. Currently, the model requires images to be precropped.
 
 ## Docker Instructions
-For ease of use, this repo includes a dockerfile at docker/Dockerfile that can be used to run the model.
+    
+    docker-machine start humpbackModel
+    eval "$(docker-machine env humpbackModel)"
+    
+For ease of use, this repo includes a dockerfile at Docker/Dockerfile that can be used to run the model.
 
 If you'd like to run the model in CPU-only mode, change the first line in the Dockerfile to
 ```
@@ -59,13 +63,45 @@ Note that this new dataset will contain a different number of whales (and in a d
 This will be resolved soon, and only the final fully connected layer will need to be retrained when given new whales to identify.
 
 #Ken's Section For Safe Keeping for the moment
+##Building Docker
+
+    cd /Users/ken/dev/animalus/idservices/Humpback-Recognition-Deep-CNN
+    docker build -t hrdcnn Docker
 
 ##Running Docker
 
-    docker run -it -v /Users/ken/dev/animalus/idservices/Humpback-Recognition-Deep-CNN:/hrdcnn-repo -v /Users/ken/dev/animalus/idservices/HRD-CNN-data:/hrdcnn-data humpbackmodel
+    docker run -it -v /Users/ken/dev/animalus/idservices/Humpback-Recognition-Deep-CNN:/hrdcnn-repo -v /Users/ken/dev/animalus/idservices/HRD-CNN-data:/hrdcnn-data hrdcnn
 
 ##Predicting:
 
 From within /hrdcnn-data run ...
 
     python /hrdcnn-repo/run.py --trainCSV /hrdcnn-data/trainingData.csv --storedWeights /hrdcnn-data/currentModel.h5 --imageDir /hrdcnn-data/orig25 --predict orig25/15243-20101013-jac-0224.jpg
+
+##Installing docker on dev.happywhale.com to use another aws instance for the docker.
+
+    sudo bash
+    apt-get update
+    apt-get install apt-transport-https ca-certificates
+    apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
+    
+    nano /etc/apt/sources.list.d/docker.list
+    
+If ubuntu Trusty 14.04 add the line or the equivalent for your version...
+    
+    deb https://apt.dockerproject.org/repo ubuntu-trusty main
+    
+Then continue running ...
+
+    apt-get update
+    apt-get purge lxc-docker
+    apt-cache policy docker-engine
+    apt-get install linux-image-extra-$(uname -r)
+    apt-get install docker-engine
+    service docker start
+
+Verify docker installed correctly...
+
+    sudo docker run hello-world
+    
+    
